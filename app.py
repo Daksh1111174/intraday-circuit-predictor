@@ -14,25 +14,70 @@ st.set_page_config(
 
 st.title("📈 Intraday 5-Minute Circuit Probability Dashboard")
 
-# ---------------- STOCK LIST ----------------
+# ---------------- NSE STOCK LIST ----------------
 NSE_STOCKS = {
+    # Large / Mid Cap
     "Reliance Industries": "RELIANCE.NS",
     "TCS": "TCS.NS",
     "Infosys": "INFY.NS",
     "HDFC Bank": "HDFCBANK.NS",
     "ICICI Bank": "ICICIBANK.NS",
-    "State Bank of India": "SBIN.NS",
-    "Larsen & Toubro": "LT.NS",
-    "Bharti Airtel": "BHARTIARTL.NS",
+    "SBI": "SBIN.NS",
     "ITC": "ITC.NS",
-    "Hindustan Unilever": "HINDUNILVR.NS"
+    "L&T": "LT.NS",
+    "Bharti Airtel": "BHARTIARTL.NS",
+
+    # Metals / Energy
+    "ONGC": "ONGC.NS",
+    "Oil India": "OILINDIA.NS",
+    "Coal India": "COALINDIA.NS",
+    "Vedanta": "VEDL.NS",
+    "Hindustan Copper": "HINDCOPPER.NS",
+    "National Aluminium": "NATIONALUM.NS",
+
+    # Defence / PSU
+    "HAL": "HAL.NS",
+    "BEL": "BEL.NS",
+    "NBCC": "NBCC.NS",
+
+    # Infrastructure
+    "HCC": "HCC.NS",
+    "NESCO": "NESCO.NS",
+    "KPIL (KPEL)": "KPEL.NS",
+    "Mangalam Industrial": "MANGIND.NS",
+
+    # Power / Energy
+    "Suzlon": "SUZLON.NS",
+    "JP Power": "JPPOWER.NS",
+    "Surana Solar": "SURANASOL.NS",
+    "Adani Green": "ADANIGREEN.NS",
+
+    # Financials
+    "IDFC First Bank": "IDFCFIRSTB.NS",
+    "ICICI AMC": "ICICIAMC.NS",
+    "IFCI": "IFCI.NS",
+    "South Indian Bank": "SOUTHBANK.NS",
+
+    # Commodities / ETF
+    "Silver ETF": "SILVERBEES.NS",
+
+    # Others / Smallcap
+    "Nava Bharat": "NAVA.NS",
+    "Rama Steel": "RAMASTEEL.NS",
+    "Nitiraj Engineers": "NITIRAJ.NS",
+    "Osiajee Texfab": "OSIAJEE.NS",
+    "Gandhar Oil": "GANDHAR.NS",
+    "Excel Realty": "EXCEL.NS",
+    "Prozone Intu": "PROZONER.NS",
+    "Rhetan TMT": "RHETAN.NS",
+    "Tenneco India": "TENNIND.NS"
 }
 
 # ---------------- USER INPUT ----------------
 st.subheader("🔍 Select Stock")
 
 selected_stock = st.selectbox(
-    "Choose from popular NSE stocks",
+    "Choose NSE Stock",
     list(NSE_STOCKS.keys())
 )
 
@@ -43,11 +88,11 @@ custom_symbol = st.text_input(
 
 symbol = (
     custom_symbol.strip().upper()
-    if custom_symbol.strip() != ""
+    if custom_symbol.strip()
     else NSE_STOCKS[selected_stock]
 )
 
-st.caption(f"Using symbol: **{symbol}**")
+st.caption(f"📌 Using symbol: **{symbol}**")
 
 # ---------------- LIVE PRICE ----------------
 try:
@@ -55,20 +100,21 @@ try:
     live_data = ticker.history(period="1d", interval="1m")
 
     if live_data.empty:
-        st.error("Live price data unavailable.")
+        st.warning("Live price data not available for this stock.")
         st.stop()
 
     live_price = live_data['Close'].iloc[-1]
     st.metric("💰 Live Price", f"₹{round(live_price, 2)}")
+
 except Exception:
-    st.error("Failed to fetch live price.")
+    st.error("Error fetching live price.")
     st.stop()
 
 # ---------------- INTRADAY DATA ----------------
 df = get_intraday_features(symbol)
 
 if df.empty or len(df) < 50:
-    st.warning("Not enough intraday data to run prediction.")
+    st.warning("Not enough intraday data available for ML prediction.")
     st.stop()
 
 df = create_intraday_target(df)
@@ -81,7 +127,6 @@ latest = df[FEATURES].iloc[-1].values.reshape(1, -1)
 probs = model.predict_proba(latest)[0]
 classes = model.classes_
 
-# Safe probability mapping
 prob_map = {-1: 0.0, 0: 0.0, 1: 0.0}
 for cls, p in zip(classes, probs):
     prob_map[int(cls)] = float(p)
