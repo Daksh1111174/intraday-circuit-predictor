@@ -17,6 +17,10 @@ live_price = ticker.history(period="1d")['Close'].iloc[-1]
 st.metric("💰 Live Price", f"₹{round(live_price, 2)}")
 
 df = get_intraday_features(symbol)
+if df.empty or len(df) < 50:
+    st.warning("Not enough intraday data available yet.")
+    st.stop()
+
 df = create_intraday_target(df)
 
 model = train_intraday_model(df)
