@@ -8,30 +8,53 @@ def get_intraday_features(symbol):
         interval="5m",
         period="5d",
         auto_adjust=False,
-        progress=False
+        progress=False,
+        group_by="column"
     )
 
+    if df.empty:
+        return df
+
+    # 🔒 Force single-level columns
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df = df[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
     df.dropna(inplace=True)
 
-    # Ensure datetime index
     df.index = pd.to_datetime(df.index)
 
-    # --- BASIC FEATURES ---
+    # ---------------- BASIC FEATURES ----------------
     df['pct_change'] = df['Close'].pct_change() * 100
     df['volume_spike'] = df['Volume'] / df['Volume'].rolling(10).mean()
 
-    # --- VWAP (DAY-WISE CORRECT METHOD) ---
-    df['date'] = df.index.date
-    df['cum_vol_price'] = (df['Close'] * df['Volume']).groupby(df['date']).cumsum()
-    df['cum_volume'] = df['Volume'].groupby(df['date']).cumsum()
+    # ---------------- DAY-WISE VWAP (SAFE) ----------------
+    dates = df.index.date
 
-    df['vwap'] = df['cum_vol_price'] / df['cum_volume']
-    df['vwap_dist'] = (df['Close'] - df['vwap']) / df['vwap']
+    cum_vol_price = (
+        df['Close'].values * df['Volume'].values
+    )
+    df['cum_vol_price'] = pd.Series(cum_vol_price).groupby(dates).cumsum().values
 
-    # --- VOLATILITY ---
-    df['volatility'] = df['pct_change'].rolling(6).std()
+    df['cum_volume'] = (
+        pd.Series(df['Volume'].values).groupby(dates).cumsum().values
+    )
 
-    # --- CLEANUP ---
+    df['vwap'] = df['cum_vol_price'].values / df['cum_volume'].values
+
+    # 🔒 FORCE SERIES ASSIGNMENT (KEY FIX)
+    vwap_dist = (df['Close'].values - df['vwap'].values) / df['vwap'].values
+    df['vwap_dist'] = vwap_dist
+
+    # ---------------- VOLATILITY ----------------
+    df['volatility'] = (
+        pd.Series(df['pct_change'].values)
+        .rolling(6)
+        .std()
+        .values
+    )
+
+    # ---------------- CLEANUP ----------------
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df.dropna(inplace=True)
 
@@ -39,10 +62,13 @@ def get_intraday_features(symbol):
 
 
 def create_intraday_target(df, circuit_limit=10):
-    df['date'] = df.index.date
+    if df.empty:
+        return df
 
-    day_open = df.groupby('date')['Close'].transform('first')
-    day_close = df.groupby('date')['Close'].transform('last')
+    dates = df.index.date
+
+    day_open = pd.Series(df['Close'].values).groupby(dates).transform('first').values
+    day_close = pd.Series(df['Close'].values).groupby(dates).transform('last').values
 
     df['day_return'] = (day_close - day_open) / day_open * 100
 
